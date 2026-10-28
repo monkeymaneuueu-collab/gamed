@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Movie Night - Pixel RPG</title>
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: #111;
+    color: white;
+    font-family: monospace;
+    overflow: hidden;
+}
+canvas {
+    display: block;
+    margin: 0 auto;
+    width: min(100vw, 960px);
+    height: auto;
+    image-rendering: pixelated;
+    background: #6dbf68;
+    border: 5px solid white;
+}
+#titleScreen, #birthdayScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    text-align: center;
+    background: #151222;
+}
+#titleScreen h1 { color: #ff7fa8; font-size: clamp(38px, 8vw, 76px); margin: 0 0 12px; }
+#titleScreen p { color: #ddd; max-width: 650px; line-height: 1.6; }
+button {
+    margin: 8px;
+    padding: 12px 22px;
+    border: 3px solid white;
+    background: #ff7fa8;
+    color: #211;
+    font: bold 17px monospace;
+    cursor: pointer;
+}
+button:hover { filter: brightness(1.12); transform: translateY(-1px); }
+#hud {
+    width: min(100vw, 960px);
+    margin: 0 auto;
+    padding: 8px 12px;
+    background: #222;
+    border: 2px solid #555;
+    color: #eee;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+#dialogueBox {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(88vw, 900px);
+    padding: 18px;
+    background: rgba(0,0,0,.94);
+    color: white;
+    border: 4px solid white;
+    line-height: 1.5;
+}
+#speaker { color: #ffd966; font-size: 19px; margin-bottom: 8px; }
+#dialogueText { min-height: 42px; white-space: pre-line; }
+#choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.choice {
+    padding: 10px 12px;
+    background: #333;
+    border: 2px solid #ddd;
+    cursor: pointer;
+}
+.choice:hover { background: #555; }
+#birthdayScreen { display: none; background: #f8eacb; color: #332b3b; z-index: 40; }
+.envelope {
+    width: 190px; height: 125px; position: relative;
+    background: #f4a6b8; border: 4px solid #443344;
+    box-shadow: 7px 7px 0 #d78a9e; margin: 20px;
+    animation: bob 1.8s infinite ease-in-out;
+}
+.envelope:before {
+    content: ""; position: absolute; left: 0; right: 0; top: -4px; margin: auto;
+    width: 0; height: 0; border-left: 91px solid transparent; border-right: 91px solid transparent;
+    border-top: 66px solid #ffccda;
+}
+.envelope:after {
+    content: "♥"; position: absolute; inset: 34px 0 0; font-size: 35px; color: #b33160;
+}
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+#birthdayCard {
+    display: none; width: min(92vw, 700px); max-height: 75vh; overflow: auto;
+    background: #fffaf0; border: 7px double #e27b9a; padding: clamp(18px, 4vw, 38px);
+    box-shadow: 0 10px 0 #d7b3a2; line-height: 1.7; position: relative;
+}
+#birthdayCard h1 { color: #df477b; font-size: clamp(28px, 6vw, 48px); margin: 0; }
+#birthdayCard .heart { font-size: 40px; margin: 6px; }
+#birthdayCard p { font-family: Georgia, serif; font-size: 17px; }
+#confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.confetti-piece { position: absolute; top: -20px; width: 9px; height: 14px; animation: fall 4s linear infinite; }
+@keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+.small { font-size: 13px; color: #666; }
+@media (max-width: 600px) {
+    #dialogueBox { bottom: 8px; padding: 12px; }
+    #hud { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<div id="titleScreen">
+    <h1>🎬 MOVIE NIGHT WITH KAKA</h1>
+    <p>A rpg game with kaka and his (oldest and best) daughter, full of adventure!!<br>
+    Woah!! you get sucked into another world! Go through tasks with your daughter and discover a surprise ending!</p>
+    <p><strong>Controls:</strong> WASD or arrow keys to move · E to interact</p>
+    <button onclick="startGame()">START ADVENTURE</button>
+</div>
+
+<div id="hud">
+    <span id="stageLabel">Stage 1: Cinema</span>
+    <span id="goalLabel">Goal: Get movie tickets for Le Maître d'école!</span>
+    <span>Move: WASD / arrows · Interact: E</span>
+</div>
+<canvas id="game" width="960" height="540"></canvas>
+
+<div id="dialogueBox">
+    <div id="speaker"></div>
+    <div id="dialogueText"></div>
+    <div id="choices"></div>
+</div>
+
+<div id="birthdayScreen">
+    <h2 id="envelopeTitle">A mysterious envelope is waiting...</h2>
+    <div class="envelope" id="envelope"></div>
+    <button id="openCardButton" onclick="openBirthdayCard()">OPEN THE LETTER :D</button>
+    <div id="birthdayCard">
+        <div class="heart">❤️❤️❤️</div>
+        <h1>HAPPY BIRTHDAY, KAKAA!!!!</h1>
+        <p><strong>Dear Kaka,</strong></p>
+        <p>
+            Happy birthday kaka! I know you dont celebrate your birthday but I will. I wish I could get you a gift but I know youre not a materialisitc person,
+            so I made this mini game!
+        </p>
+        <p>May Allah give you a long and prosperous life kaka ❤️</p>
+        <p>With lots of love and kisses from across the world,<br><strong> your geçegul</strong></p>
+        <p class="small">P.S. I hope you come soon so we can celebrate in person!</p>
+        <div class="heart">🎂 🎉 🌟</div>
+        <button onclick="location.reload()">PLAY AGAIN?</button>
+    </div>
+    <div id="confetti"></div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let keys = {};
+let gameStarted = false;
+let dialogueOpen = false;
+let stage = "cinema";
+let tickets = false;
+let popcorn = false;
+let movieStars = 0;
+let daughterFound = false;
+let finaleReady = false;
+let lastInteract = false;
+
+const player = { x: 100, y: 390, size: 30, speed: 3.5, color: "#5ba856" };
+const daughter = { x: 760, y: 390, size: 30, color: "#f04467" };
+
+const people = [
+    { x: 260, y: 250, name: "Ticket Clerk", color: "#f4c56a", talked: false,
+      text: "Welcome to pixieland! Would you like two free tickets for tonight's big movie?" },
+    { x: 570, y: 390, name: "Popcorn Seller", color: "#b6e2ff", talked: false,
+      text: "Fresh popcorn! Buy fresh buttery popcorn before the big movie." }
+];
+
+const stars = [
+    {x: 180, y: 150, got: false}, {x: 430, y: 320, got: false},
+    {x: 700, y: 160, got: false}
+];
+let portalPulse = 0;
+let movingThings = [];
+
+function startGame() {
+    document.getElementById("titleScreen").style.display = "none";
+    gameStarted = true;
+    showDialogue("Ejegul", "Kaka! Our movie night is finally here! Let's get our tickets and snacks before the show starts.", [
+        {text: "Hajmo!", action: closeDialogue}
+    ]);
+}
+function showDialogue(name, text, options) {
+    dialogueOpen = true;
+    document.getElementById("dialogueBox").style.display = "block";
+    document.getElementById("speaker").textContent = name;
+    document.getElementById("dialogueText").textContent = text;
+    const choices = document.getElementById("choices");
+    choices.innerHTML = "";
+    (options || [{text:"Continue", action:closeDialogue}]).forEach(option => {
+        const button = document.createElement("div");
+        button.className = "choice";
+        button.textContent = option.text;
+        button.onclick = option.action;
+        choices.appendChild(button);
+    });
+}
+function closeDialogue() {
+    dialogueOpen = false;
+    document.getElementById("dialogueBox").style.display = "none";
+}
+function interact() {
+    if (dialogueOpen || !gameStarted) return;
+    if (stage === "cinema") {
+        for (const p of people) {
+            if (distance(player, p) < 65) {
+                if (p.name === "Ticket Clerk") {
+                    showDialogue(p.name, tickets ? "Enjoy Le Maître d'école! Your tickets are ready." : p.text, [
+                        {text: tickets ? "Thanks!" : "Buy two tickets", action: () => {
+                            tickets = true; updateHUD();
+                            showDialogue("Ticket Clerk", "Two tickets! Screen 1 for your movie is straight ahead. Have a wonderful movie night!", [{text:"Thanks!",action:closeDialogue}]);
+                        }},
+                        {text:"Not yet",action:closeDialogue}
+                    ]);
+                } else {
+                    showDialogue(p.name, popcorn ? "Hope you enjoy the popcorn!" : p.text, [
+                        {text: popcorn ? "Yum!" : "Get popcorn", action: () => {
+                            popcorn = true; updateHUD();
+                            showDialogue("Popcorn Seller", "One extra-large popcorn for you both! Don't drop it during the movie, I dont want to clean it up again...", [{text:"Let's go!",action:closeDialogue}]);
+                        }},
+                        {text:"ehhhh, no thanks",action:closeDialogue}
+                    ]);
+                }
+                return;
+            }
+        }
+        if (distance(player, daughter) < 65 && tickets && popcorn) {
+            showDialogue("Ejegul", "Tickets? Check. Popcorn? Check. Let's find our seats, kaka!", [
+                {text:"Enter the theater", action: () => { stage = "screen"; player.x = 100; player.y = 430; closeDialogue(); updateHUD(); }}
+            ]);
+            return;
+        }
+        if (player.x > 770 && player.y < 180 && tickets && popcorn) {
+            showDialogue("Movie Screen", "The movie is starting... Wait, why is the screen glowing?", [
+                {text:"Watch the movie",action:()=>{stage="movie1";player.x=70;player.y=450;closeDialogue();updateHUD();}}
+            ]);
+        } else if (!tickets || !popcorn) {
+            showDialogue("Hint", "Before the movie starts, talk to the ticket clerk and popcorn seller. Press E near them.", [{text:"Got it",action:closeDialogue}]);
+        }
+    } else if (stage === "screen") {
+        if (player.x > 760 && player.y < 200) {
+            stage = "movie1"; player.x = 70; player.y = 450; closeDialogue(); updateHUD();
+        } else {
+            showDialogue("Daughter", "Our seats are near the screen. Finally, I was scared we'd get back seats again. Let's head up to the glowing screen!", [{text:"Okay",action:closeDialogue}]);
+        }
+    } else if (stage === "movie1") {
+        for (const star of stars) {
+            if (!star.got && distance(player, star) < 50) {
+                star.got = true; movieStars++; updateHUD();
+                showDialogue("Magic Star", "You found a movie star! Collect all three to open the portal.", [{text:"Continue",action:closeDialogue}]);
+                return;
+            }
+        }
+        if (movieStars >= 3 && player.x > 850) {
+            stage = "movie2"; player.x = 65; player.y = 260; updateHUD();
+            showDialogue("Ejegul", "Whoa! I just wanted to watch a movie.. why is it tryna kill us!! We escaped the first movie... but now we're in a different one! Ugh, Let's find the exit together.", [{text:"Explore!",action:closeDialogue}]);
+            return;
+        }
+        showDialogue("Hint", movieStars < 3 ? "Find the glowing stars around this new movie world. Walk close and press E to collect each one." : "Head to the glowing portal on the right and press E.", [{text:"Okay",action:closeDialogue}]);
+    } else if (stage === "movie2") {
+        if (distance(player, daughter) < 70) {
+            daughterFound = true;
+            showDialogue("Ejegul", "I think we can escape if stand on the golden box thing, kaka! come on, I don't wanna miss the movie.", [{text:"Let's do it",action:closeDialogue}]);
+            return;
+        }
+        if (player.x > 810 && daughterFound) {
+            stage = "return"; player.x = 80; player.y = 420; updateHUD();
+            showDialogue("Ejegul", "We finally made it! Let's go back back to the screen and return to the theater. Eje must be worried.", [{text:"Go home",action:closeDialogue}]);
+            return;
+        }
+        showDialogue("Hint", "Find your daughter in this strange movie world. She's waiting near the red tower on the right.", [{text:"Find her",action:closeDialogue}]);
+    } else if (stage === "return") {
+        if (player.x > 820 && player.y < 210) {
+            showBirthdayScreen();
+        } else {
+            showDialogue("Ejegul", "The theater screen is over there. Im so tired, ugh! Can we finally go back?", [{text:"Let's go",action:closeDialogue}]);
+        }
+    }
+}
+function distance(a,b) {
+    const dx = (a.x + (a.size || 0)/2) - (b.x + (b.size || 0)/2);
+    const dy = (a.y + (a.size || 0)/2) - (b.y + (b.size || 0)/2);
+    return Math.sqrt(dx*dx + dy*dy);
+}
+function updateHUD() {
+    const labels = {
+        cinema: ["Cinema", "Talk to the clerk and popcorn seller"],
+        screen: ["Theater", "Head to the glowing screen"],
+        movie1: ["Movie World 1", "Collect all 3 stars: " + movieStars + "/3"],
+        movie2: ["Movie World 2", "Find your red-cube daughter"],
+        return: ["Back to the Cinema", "Return to the screen for your surprise ;))"]
+    };
+    document.getElementById("stageLabel").textContent = "Stage: " + (labels[stage] || ["", ""])[0];
+    document.getElementById("goalLabel").textContent = "Goal: " + (labels[stage] || ["", ""])[1];
+}
+function update() {
+    if (!gameStarted || dialogueOpen) return;
+    if (keys.ArrowUp || keys.w || keys.W) player.y -= player.speed;
+    if (keys.ArrowDown || keys.s || keys.S) player.y += player.speed;
+    if (keys.ArrowLeft || keys.a || keys.A) player.x -= player.speed;
+    if (keys.ArrowRight || keys.d || keys.D) player.x += player.speed;
+    player.x = Math.max(0, Math.min(canvas.width-player.size, player.x));
+    player.y = Math.max(0, Math.min(canvas.height-player.size, player.y));
+    if (stage === "movie1") {
+        stars.forEach(star => {
+            if (!star.got && distance(player, star) < 30) {
+
+                star.got = true; movieStars++; updateHUD();
+            }
+        });
+    }
+    if (stage === "movie2") {
+        if (distance(player, daughter) < 130) {
+            daughter.x += Math.sign(player.x - daughter.x) * 0.7;
+            daughter.y += Math.sign(player.y - daughter.y) * 0.7;
+        }
+    }
+}
+function drawCube(x, y, color, label) {
+    // Simple solid-color cube with two black eyes
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 30, 30);
+
+    // Left eye
+    ctx.fillStyle = "#000";
+    ctx.fillRect(x + 7, y + 9, 4, 4);
+
+    // Right eye
+    ctx.fillRect(x + 19, y + 9, 4, 4);
+}
+function drawHouse(x,y,color) {
+    ctx.fillStyle = color; ctx.fillRect(x,y,120,95);
+    ctx.fillStyle = "#55334c";
+    ctx.beginPath(); ctx.moveTo(x-10,y); ctx.lineTo(x+60,y-48); ctx.lineTo(x+130,y); ctx.fill();
+    ctx.fillStyle = "#ffe3a0"; ctx.fillRect(x+15,y+20,24,25); ctx.fillRect(x+80,y+20,24,25);
+    ctx.fillStyle = "#5c3a2e"; ctx.fillRect(x+48,y+52,25,43);
+}
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    portalPulse = (portalPulse + 1) % 100;
+    if (stage === "cinema") drawCinema();
+    if (stage === "screen") drawTheater();
+    if (stage === "movie1") drawMovieWorld1();
+    if (stage === "movie2") drawMovieWorld2();
+    if (stage === "return") drawReturnCinema();
+    drawCube(player.x,player.y,player.color,"YOU");
+}
+function drawCinema() {
+    ctx.fillStyle = "#6dbf68"; ctx.fillRect(0,0,960,540);
+    ctx.fillStyle = "#4aa3ff"; ctx.fillRect(0,0,960,75);
+    ctx.fillStyle = "#d9b06d"; ctx.fillRect(0,75,960,12);
+    drawHouse(80,160,"#ce7e5b"); drawHouse(410,160,"#c27aaf");
+    drawHouse(730,160,"#d9a84e");
+    people.forEach(p => drawCube(p.x,p.y,p.color,p.name));
+    drawCube(daughter.x,daughter.y,daughter.color,"DAUGHTER");
+    ctx.fillStyle = "#fff"; ctx.font = "20px monospace";
+    ctx.fillText("PIXEL PALACE CINEMA",330,40);
+    ctx.fillStyle = "#f8e6c0"; ctx.fillRect(770,90,150,80);
+    ctx.fillStyle = "#e35c8d"; ctx.fillRect(790,105,110,48);
+    ctx.fillStyle = "#fff"; ctx.fillText("MOVIES",805,135);
+    ctx.fillStyle = "#fff"; ctx.font = "16px monospace";
+    ctx.fillText("Press E near people to talk",20,510);
+}
+function drawTheater() {
+    ctx.fillStyle = "#241b3a"; ctx.fillRect(0,0,960,540);
+    for (let i=0;i<8;i++) {
+        ctx.fillStyle = i%2 ? "#632f56" : "#7b3a60";
+        ctx.fillRect(0,100+i*48,960,28);
+    }
+    ctx.fillStyle = "#e7c1a0"; ctx.fillRect(760,65,150,105);
+    ctx.fillStyle = "#fff5d1"; ctx.fillRect(775,78,120,78);
+    ctx.fillStyle = "#8de9ff"; ctx.fillRect(800,95,70,44);
+    ctx.fillStyle = "white"; ctx.font = "18px monospace"; ctx.fillText("SCREEN",810,62);
+    drawCube(daughter.x,daughter.y,daughter.color,"DAUGHTER");
+    ctx.fillStyle = "#fff"; ctx.fillText("Go near the screen and press E",250,35);
+}
+function drawMovieWorld1() {
+    ctx.fillStyle = "#171c48"; ctx.fillRect(0,0,960,540);
+    // Stars in the sky
+    for (let i=0;i<75;i++) {
+        ctx.fillStyle = (i%3===0) ? "#ffe89c" : "#fff";
+        ctx.fillRect((i*137)%960,(i*71)%280,3,3);
+    }
+    ctx.fillStyle = "#4b9b73"; ctx.fillRect(0,350,960,190);
+    ctx.fillStyle = "#326b62"; ctx.fillRect(0,430,960,110);
+    drawHouse(130,300,"#684d9a"); drawHouse(650,300,"#9a4d8d");
+    stars.forEach(star => {
+        if (!star.got) {
+            ctx.fillStyle = "#ffe56e";
+            ctx.fillRect(star.x,star.y,18,18);
+            ctx.fillRect(star.x+5,star.y-5,8,28);
+            ctx.fillRect(star.x-5,star.y+5,28,8);
+        }
+    });
+    ctx.fillStyle = "#fff"; ctx.font = "18px monospace";
+    ctx.fillText("MOVIE WORLD 1: STAR HUNT",280,35);
+    if (movieStars >= 3) {
+        ctx.fillStyle = "#f4d35e";
+        ctx.fillRect(875,180,48,170);
+        ctx.fillStyle = "#fff"; ctx.fillText("PORTAL",860,165);
+    }
+}
+function drawMovieWorld2() {
+    ctx.fillStyle = "#ffb26b"; ctx.fillRect(0,0,960,540);
+    ctx.fillStyle = "#fbe7a1"; ctx.fillRect(0,0,960,300);
+    ctx.fillStyle = "#e77b6b"; ctx.fillRect(0,360,960,180);
+    // Floating platforms
+    [[180,330,150,22],[410,270,160,22],[650,335,150,22]].forEach((p,i) => {
+        ctx.fillStyle = ["#7a6bd1","#5c9b72","#6d83ba"][i];
+        ctx.fillRect(p[0],p[1],p[2],p[3]);
+    });
+    // red tower where daughter waits
+    ctx.fillStyle = "#a53b5b"; ctx.fillRect(810,190,70,170);
+    ctx.fillStyle = "#ffdfef"; ctx.fillRect(825,210,40,45);
+    drawCube(daughter.x,daughter.y,daughter.color,"DAUGHTER");
+    ctx.fillStyle = "#553344"; ctx.font = "18px monospace";
+    ctx.fillText("MOVIE WORLD 2: FIND EACH OTHER",220,35);
+    ctx.fillText("Find the red cube!",760,170);
+    if (daughterFound) {
+        ctx.fillStyle = "#fff"; ctx.fillText("Together!",820,400);
+        ctx.fillStyle = "#ffe66d"; ctx.fillRect(860,420,70,60);
+    }
+}
+function drawReturnCinema() {
+    ctx.fillStyle = "#201a35"; ctx.fillRect(0,0,960,540);
+    ctx.fillStyle = "#673653"; ctx.fillRect(0,120,960,300);
+    ctx.fillStyle = "#fff4d0"; ctx.fillRect(760,65,150,110);
+    ctx.fillStyle = "#ff80ab"; ctx.fillRect(780,85,110,70);
+    ctx.fillStyle = "#fff"; ctx.font = "18px monospace"; ctx.fillText("HOME SCREEN",775,55);
+    drawCube(daughter.x,daughter.y,daughter.color,"DAUGHTER");
+    ctx.fillStyle = "#fff"; ctx.fillText("The adventure is finally over. Find the screen!",270,35);
+}
+function showBirthdayScreen() {
+    gameStarted = false;
+    document.getElementById("birthdayScreen").style.display = "flex";
+    createConfetti();
+}
+function createConfetti() {
+    const area = document.getElementById("confetti");
+    area.innerHTML = "";
+    const pieces = ["#ff477e","#ffcf56","#69d2e7","#8be28b","#b59bff"];
+    for (let i=0;i<90;i++) {
+        const piece = document.createElement("div");
+        piece.className = "confetti-piece";
+        piece.style.left = Math.random()*100 + "%";
+        piece.style.animationDelay = Math.random()*3 + "s";
+        piece.style.animationDuration = (2.5+Math.random()*3) + "s";
+        piece.style.background = pieces[i%pieces.length];
+        area.appendChild(piece);
+    }
+}
+function openBirthdayCard() {
+    document.getElementById("envelope").style.display = "none";
+    document.getElementById("envelopeTitle").textContent = "A gift that'll live foreverrrr!!!";
+    document.getElementById("openCardButton").style.display = "none";
+    document.getElementById("birthdayCard").style.display = "block";
+}
+document.addEventListener("keydown", e => {
+    keys[e.key] = true;
+    if ((e.key === "e" || e.key === "E") && !lastInteract) {
+        lastInteract = true;
+        interact();
+    }
+});
+document.addEventListener("keyup", e => {
+    keys[e.key] = false;
+    if (e.key === "e" || e.key === "E") lastInteract = false;
+});
+function gameLoop() {
+    if (gameStarted) {
+        update();
+        draw();
+    }
+    requestAnimationFrame(gameLoop);
+}
+updateHUD();
+gameLoop();
+</script>
+</body>
+</html>
